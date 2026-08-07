@@ -1,0 +1,2 @@
+CREATE INDEX idx_player_match_stats_player_id
+ON player_match_stats (player_id);

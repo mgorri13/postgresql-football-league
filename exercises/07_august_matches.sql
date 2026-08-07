@@ -1,0 +1,17 @@
+SELECT
+  matches.played_at,
+  home_team.name AS home_team,
+  matches.home_score,
+  matches.away_score,
+  away_team.name AS away_team,
+  CASE
+    WHEN matches.home_score > matches.away_score THEN 'Home win'
+    WHEN matches.home_score = matches.away_score THEN 'Draw'
+    ELSE 'Away win'
+  END AS outcome
+FROM matches
+JOIN teams AS home_team ON home_team.id = matches.home_team_id
+JOIN teams AS away_team ON away_team.id = matches.away_team_id
+WHERE matches.played_at >= '2025-08-01'
+  AND matches.played_at < '2025-09-01'
+ORDER BY matches.played_at;
