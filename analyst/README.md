@@ -160,7 +160,6 @@ analyst/
 
 ## Future improvements
 
-- Streamlit web interface
 - Persistent multi-turn conversations
 - More test cases and evaluation datasets
 - Docker deployment for the analyst application

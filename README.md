@@ -1,22 +1,83 @@
 # PostgreSQL Football League
 
-This is my personal project for learning PostgreSQL through the design, implementation, operation, and analysis of a fictional football-league database. It is intentionally database-first: the deliverables are the PostgreSQL schema, migrations, data generator, analytical SQL, performance work, and operational workflows rather than a user interface.
+This is my personal project for learning PostgreSQL through the design, implementation, operation, and analysis of a fictional football-league database.
 
-## Overview
+The project is database-first: PostgreSQL, SQL migrations, generated data, query design, performance analysis, and operational workflows are the primary deliverables. It also includes a LangGraph-powered natural-language analyst that safely answers questions using the real PostgreSQL data.
 
-The project models seasons, teams, players, fixtures, goals, lineups, cards, substitutions, and player-match statistics. A Python generator creates synthetic but internally consistent data; PostgreSQL stores it, enforces integrity rules, and exposes analytical and operational capabilities.
+## Project overview
 
-The performance dataset contains approximately 100 seasons, 1,200 matches, 43,200 lineup selections, 30,000 player-match-stat rows, and 4,800 goal events.
+The system models a fictional football league across many seasons. A Python generator creates teams, players, fixtures, lineups, substitutions, cards, player-match statistics, and goals.
 
-## Stack
+PostgreSQL stores the data, enforces integrity rules, exposes analytical views, and supports performance and operations exercises.
+
+The generated performance dataset currently contains approximately:
+
+```text
+100 seasons
+4 teams
+80 players
+1,200 matches
+43,200 lineup selections
+30,000 player-match-stat records
+4,800 goal events
+```
+
+## Natural-language database analyst
+
+This repository includes a safe natural-language analyst for the football database, built with LangGraph, OpenAI, PostgreSQL, SQLGlot, and Streamlit.
+
+Users can ask football questions in plain English through either a command-line interface or a simple web app. The application:
+
+- clarifies ambiguous questions before generating SQL;
+- generates a proposed SQL query with an LLM;
+- validates the query using a SQL parser;
+- allows only safe read-only `SELECT` queries;
+- uses a read-only PostgreSQL account and transaction;
+- runs the approved query against the real database;
+- gives the returned rows to the LLM for a grounded natural-language explanation;
+- makes one controlled repair attempt if generated SQL fails validation or execution.
+
+The LLM never receives direct control of PostgreSQL. LangGraph coordinates the workflow, routing decisions, clarification path, retry loop, and final response.
+
+Run the web app locally:
+
+```bash
+source analyst/.venv/bin/activate
+streamlit run analyst/web_app.py
+```
+
+For the full analyst architecture, safety design, setup instructions, and test commands, see [the analyst documentation](analyst/README.md).
+
+## Technology stack
 
 - PostgreSQL 17
 - Docker Compose / Docker Desktop
 - Python 3
-- `psycopg` and `Faker`
-- SQL migrations, analytical queries, views, materialized views, functions, triggers, indexes, and role-based permissions
+- `psycopg` for PostgreSQL connectivity
+- `Faker` for synthetic data generation
+- LangGraph for workflow orchestration and conditional routing
+- OpenAI for structured question assessment, SQL generation, repair, and result explanations
+- SQLGlot for parser-based SQL validation
+- Streamlit for the analyst web interface
+- SQL migrations, views, materialized views, functions, triggers, and indexes
 
 ## Data model
+
+Core entities:
+
+```text
+seasons
+teams
+players
+matches
+goals
+lineups
+cards
+substitutions
+player_match_stats
+```
+
+Key relationships:
 
 ```text
 seasons ──< matches >── teams
@@ -28,31 +89,40 @@ matches ──< substitutions
 matches ──< player_match_stats >── players
 ```
 
-## Setup
+## Local setup
 
-Requirements: Docker Desktop and Python 3.10+.
+Requirements:
+
+- Docker Desktop
+- Python 3.10+
+
+Start PostgreSQL:
 
 ```bash
 docker compose up -d
-
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
 ```
 
-Connect to PostgreSQL:
+Connect with `psql`:
 
 ```bash
 docker compose exec db psql -U postgres -d football_league
 ```
 
-Run the generator:
+Create and activate the database-project Python environment:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install "psycopg[binary]" Faker
+```
+
+Run the data generator:
 
 ```bash
 python scripts/generate_data.py
 ```
 
-After regenerating match data, refresh the cached standings:
+Refresh the cached standings after regenerating match data:
 
 ```sql
 REFRESH MATERIALIZED VIEW season_standings;
@@ -60,7 +130,7 @@ REFRESH MATERIALIZED VIEW season_standings;
 
 ## Migrations
 
-The database schema is versioned through ordered migrations in `migrations/`.
+The schema is managed through ordered SQL migrations in `migrations/`.
 
 ```text
 001_initial_schema.sql
@@ -75,55 +145,85 @@ The database schema is versioned through ordered migrations in `migrations/`.
 010_add_player_match_stats_player_id_index.sql
 011_add_goals_scorer_id_index.sql
 012_create_readonly_role.sql
+013_create_football_analyst_role.sql
 ```
 
-Apply one migration from the project root:
+Apply a migration from the project root:
 
 ```bash
 docker compose exec -T db psql -v ON_ERROR_STOP=1 -U postgres -d football_league < migrations/<migration_file>.sql
 ```
 
-Applied migrations are immutable; subsequent schema changes require a new numbered migration.
+Applied migrations are treated as immutable. New schema changes are introduced through new numbered migration files.
 
 ## Learning phases
 
-### Phase 0 — Foundation
+### Phase 0 — Project foundation
 
-Created a Docker-based PostgreSQL environment, project structure, setup documentation, conventions, and reset workflow.
+- Created a Docker-based PostgreSQL development environment.
+- Defined project structure, naming conventions, and reset workflow.
+- Documented setup and database commands.
 
 ### Phase 1 — Schema and basic SQL
 
-Created the initial relational model for seasons, teams, players, matches, and goals. Used primary and foreign keys, PostgreSQL types, identity columns, and `NOT NULL`, `UNIQUE`, `CHECK`, and default constraints.
+- Created the initial relational schema for seasons, teams, players, matches, and goals.
+- Used primary keys, foreign keys, PostgreSQL data types, `NOT NULL`, `UNIQUE`, `CHECK`, and default constraints.
+- Applied the first schema migration and performed basic `INSERT` and `SELECT` operations.
 
-### Phase 2 — Generated data
+### Phase 2 — Generated football data
 
-Built a Python generator using `psycopg` and `Faker`. It creates seasons, teams, players, home-and-away fixtures, results, and matching goal events in transactions.
+- Created a Python generator using `psycopg` and `Faker`.
+- Generated fictional teams, players, fixtures, results, and goal events.
+- Used database transactions and verified that goal-event counts match recorded scorelines.
 
-### Phase 3 — Querying and analysis
+### Phase 3 — SQL querying and analysis
 
-Built analytical queries with `JOIN`, `LEFT JOIN`, `WHERE`, `GROUP BY`, `HAVING`, aggregates, `CASE`, subqueries, and CTEs. Queries include top scorers, readable match results, and a league table calculated from raw results.
+- Built reusable queries for top scorers, league standings, and readable match results.
+- Practiced `JOIN`, `LEFT JOIN`, `WHERE`, `GROUP BY`, `HAVING`, `COUNT`, `AVG`, `CASE`, subqueries, CTEs, and sorting.
+- Calculated league standings from raw match results rather than storing the table directly.
 
 ### Phase 4 — Rich match data
 
-Added lineups, cards, substitutions, and player-match statistics. The generator creates starters, benches, substitutions, minutes played, ratings, shots, and passing statistics.
+- Added lineups, card events, substitutions, and player-match statistics.
+- Modeled a many-to-many match/player relationship through `lineups`.
+- Generated starters, substitutes, player minutes, ratings, shots, and passing statistics.
+- Validated data relationships with SQL.
 
 ### Phase 5 — Advanced analytics and automation
 
-Used window functions for rolling five-match form, previous-match comparisons, and per-match rankings. Added the `player_rolling_form` view, the `season_standings` materialized view, a parameterized average-rating function, and a trigger that rejects cards for players absent from a match lineup.
+- Used window functions for rolling five-match player form, previous-match comparisons, and per-match ranking.
+- Created the `player_rolling_form` view.
+- Created the `season_standings` materialized view and refreshed it after data changes.
+- Created a parameterized function for a player’s seasonal average rating.
+- Created a trigger that rejects card events for players absent from the relevant lineup.
 
 ### Phase 6 — Performance, backups, and permissions
 
-Scaled the generator to 100 seasons. Used `EXPLAIN ANALYZE` to compare sequential and bitmap index scans, indexed player statistics and goal scorers, created/restored a `pg_dump` backup, and created a read-only PostgreSQL role.
+- Scaled the generator to 100 seasons for meaningful query-plan analysis.
+- Used `EXPLAIN ANALYZE` to inspect sequential scans and bitmap index scans.
+- Added indexes on `player_match_stats.player_id` and `goals.scorer_id`.
+- Created a custom-format backup with `pg_dump` and restored it into a separate database with `pg_restore`.
+- Created and tested a read-only PostgreSQL permission role.
 
-## Example analytics
+### Phase 7 — LangGraph database analyst
 
-Run a saved query:
+- Built a LangGraph workflow that turns natural-language football questions into safe database answers.
+- Added conditional routing for ambiguous questions, SQL validation, execution errors, and controlled repair attempts.
+- Used structured LLM output for question assessment, SQL generation, SQL repair, and result explanations.
+- Added SQLGlot parser-based validation and an allow-list of database tables.
+- Created a restricted PostgreSQL analyst account with read-only permissions.
+- Built a Streamlit web interface that includes the chat experience and an interactive workflow diagram.
+- Added automated tests for SQL safety rules and LangGraph routing logic.
+
+## Example queries
+
+Run a saved query from the project root:
 
 ```bash
 docker compose exec -T db psql -U postgres -d football_league < queries/04_player_rolling_form.sql
 ```
 
-Query rolling player form:
+Inspect player form through the view:
 
 ```sql
 SELECT *
@@ -131,7 +231,7 @@ FROM player_rolling_form
 ORDER BY last_name, first_name, played_at;
 ```
 
-Query cached standings:
+Query the cached standings:
 
 ```sql
 SELECT *
@@ -139,7 +239,9 @@ FROM season_standings
 ORDER BY points DESC, goal_difference DESC, goals_for DESC;
 ```
 
-Inspect an execution plan:
+## Performance example
+
+Inspect the plan for a player-history query:
 
 ```sql
 EXPLAIN ANALYZE
@@ -147,6 +249,8 @@ SELECT *
 FROM player_match_stats
 WHERE player_id = 1;
 ```
+
+With the larger dataset and `idx_player_match_stats_player_id`, PostgreSQL uses an index-based plan rather than scanning every row.
 
 ## Backup and restore
 
@@ -166,17 +270,21 @@ docker compose exec -T db pg_restore -U postgres -d football_league_restore_test
 ## Repository structure
 
 ```text
-backups/       # Local dumps; excluded from Git
-exercises/     # SQL exercises
-migrations/    # Ordered schema changes
-queries/       # Reusable analytical SQL
-scripts/       # Python data generator
-solutions/     # Exercise solutions
+.
+├── analyst/       # LangGraph natural-language database analyst and Streamlit app
+├── backups/       # Local database dumps; do not commit
+├── exercises/     # SQL learning exercises
+├── migrations/    # Ordered database schema changes
+├── queries/       # Reusable analytical SQL queries
+├── scripts/       # Python data generator
+├── solutions/     # Exercise solutions
+├── docker-compose.yml
+└── README.md
 ```
 
 ## Development notes
 
-- Docker credentials are local development credentials only.
-- The generator resets fictional data; it does not change the schema.
-- Do not commit `.venv/`, backups, environment files, or Python cache files.
-- Materialized views require explicit refresh after source-data changes.
+- The Docker username/password are local development credentials only.
+- Do not commit `.venv/`, `backups/`, `.env`, or `__pycache__/` to Git.
+- The database generator deliberately resets fictional data on each run; it does not change the schema.
+- Materialized views must be refreshed after data generation or other match-data changes.
