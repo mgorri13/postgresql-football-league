@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:17
+    container_name: football-analyst-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: football_league
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - football_analyst_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: football-analyst-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      FOOTBALL_DB_HOST: db
+      FOOTBALL_DB_PORT: "5432"
+      FOOTBALL_DB_NAME: football_league
+      FOOTBALL_DB_USER: football_analyst
+      FOOTBALL_DB_PASSWORD: ${FOOTBALL_DB_PASSWORD:?Set FOOTBALL_DB_PASSWORD in .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env}
+    networks:
+      - default
+      - caddy_proxy
+
+networks:
+  caddy_proxy:
+    external: true
+    name: fusion_rag_default
+
+volumes:
+  football_analyst_postgres_data:
