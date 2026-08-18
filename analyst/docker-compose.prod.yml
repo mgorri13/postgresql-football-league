@@ -15,7 +15,7 @@ services:
       timeout: 5s
       retries: 10
 
-  app:
+  football_analyst:
     build: .
     container_name: football-analyst-app
     restart: unless-stopped
