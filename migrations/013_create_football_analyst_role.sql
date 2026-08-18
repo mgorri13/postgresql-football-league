@@ -1,0 +1,1 @@
+CREATE ROLE football_analyst LOGIN IN ROLE football_readonly;
